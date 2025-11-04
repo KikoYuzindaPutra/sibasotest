@@ -4,14 +4,14 @@ const db = require("./models"); // Sequelize setup
 
 const app = express();
 
-// Configure CORS
+// ✅ Daftar domain Frontend yang diizinkan (bisa ditambah)
 const allowedOrigins = [
-  "https://www.sibaso.site"    // kalau ada versi www juga
+  "https://www.sibaso.site",
+  "https://sibaso.site"
 ];
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // izinkan tanpa origin (misal Postman) atau jika origin ada di daftar
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -19,25 +19,18 @@ const corsOptions = {
     }
   },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["x-access-token", "Origin", "Content-Type", "Accept"]
+  allowedHeaders: ["Authorization", "x-access-token", "Origin", "Content-Type", "Accept"],
+  credentials: true
 };
 
+// ✅ Pasang middleware CORS
 app.use(cors(corsOptions));
 
-// Parse JSON requests
+// ✅ Parsing request body
 app.use(express.json());
-
-// Parse URL-encoded requests
 app.use(express.urlencoded({ extended: true }));
 
-// Database connection
-db.sequelize.sync({ alter: true }).then(() => {
-    console.log("Database synchronized");
-}).catch(err => {
-    console.error("Failed to sync database:", err.message);
-});
-
-// Routes
+// ✅ Import semua routes
 const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
 const courseTagRoutes = require('./routes/courseTag.routes');
@@ -48,10 +41,8 @@ const materialRoutes = require('./routes/materialTag.routes');
 const dropdownRoutes = require('./routes/dropdown.routes');
 const courseMaterialRoutes = require('./routes/courseMaterial.routes');
 const questionPackageRoutes = require('./routes/questionPackage.routes');
-// const editSoalRoutes = require('./routes/editsoal.routes'); // Import the correct router
 
-// // Use routes
-// app.use('/api', editSoalRoutes); // Register editSoal routes under /api
+// ✅ Register route ke Express
 courseMaterialRoutes(app);
 authRoutes(app);
 userRoutes(app);
@@ -63,21 +54,18 @@ materialRoutes(app);
 dropdownRoutes(app);
 questionPackageRoutes(app);
 
-// Set port and start server
+// ✅ Port Railway atau default ke 8080
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}.`);
-});
 
-db.sequelize.sync({ alter: true }) // <- kode ini
+// ✅ Sync database SEKALI + start server SEKALI
+db.sequelize.sync({ alter: true })
   .then(() => {
-    console.log("Database synchronized");
-    // Mulai server setelah DB sinkron
-    const PORT = process.env.PORT || 8080;
+    console.log("✅ Database synchronized");
+
     app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}.`);
+      console.log(`🚀 Server is running on port ${PORT}`);
     });
   })
   .catch(err => {
-    console.error("Failed to sync database:", err);
+    console.error("❌ Failed to sync database:", err);
   });
