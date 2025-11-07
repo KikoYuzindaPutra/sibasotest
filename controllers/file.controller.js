@@ -53,7 +53,7 @@ exports.uploadFile = async (req, res) => {
         '.php', '.rb', '.go', '.rs', '.kt', '.kts', '.swift',
         '.dart', '.scala', '.r', '.m', '.sh', '.bash', '.sql',
         '.html', '.htm', '.css', '.scss', '.sass',
-        '.json', '.xml', '.yaml', '.yml','.pdf'
+        '.json', '.xml', '.yaml', '.yml'
       ];
       
       if (!allowedExtensions.includes(ext)) {
