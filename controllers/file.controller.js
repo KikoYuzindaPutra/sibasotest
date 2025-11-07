@@ -14,7 +14,6 @@ const archiver = require('archiver');
 // BASIC FILE OPERATIONS
 // ========================================
 
-// Enhanced Upload File with proper tracking
 exports.uploadFile = async (req, res) => {
   try {
     if (!req.file) {
@@ -22,13 +21,62 @@ exports.uploadFile = async (req, res) => {
     }
 
     if (!req.body.questionSetId) {
-      // Hapus file jika tidak ada questionSetId
       fs.unlinkSync(req.file.path);
       return res.status(400).send({ message: "Question set ID diperlukan!" });
     }
 
-    // Normalize category function
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    const fileCategory = req.body.fileCategory;
+
+    console.log('Upload file request:', {
+      originalCategory: fileCategory,
+      filename: req.file.originalname,
+      extension: ext,
+      mimetype: req.file.mimetype, // ✅ Log mimetype
+      questionSetId: req.body.questionSetId
+    });
+
+    // Validasi
+    if (fileCategory === 'questions') {
+      const allowedExtensions = ['.pdf', '.docx', '.doc'];
+      if (!allowedExtensions.includes(ext)) {
+        fs.unlinkSync(req.file.path);
+        return res.status(400).send({ 
+          message: `Format file ${ext} tidak didukung untuk soal. Gunakan PDF, DOCX, atau DOC.` 
+        });
+      }
+    } 
+    else if (fileCategory && fileCategory.startsWith('answers_')) {
+      const allowedExtensions = [
+        '.txt', '.js', '.jsx', '.ts', '.tsx', '.py', '.java',
+        '.c', '.cpp', '.cc', '.cxx', '.h', '.hpp', '.cs',
+        '.php', '.rb', '.go', '.rs', '.kt', '.kts', '.swift',
+        '.dart', '.scala', '.r', '.m', '.sh', '.bash', '.sql',
+        '.html', '.htm', '.css', '.scss', '.sass',
+        '.json', '.xml', '.yaml', '.yml'
+      ];
+      
+      if (!allowedExtensions.includes(ext)) {
+        fs.unlinkSync(req.file.path);
+        return res.status(400).send({ 
+          message: `Format file ${ext} tidak didukung untuk kunci jawaban.` 
+        });
+      }
+    }
+    else if (fileCategory === 'testCases') {
+      const allowedExtensions = ['.txt'];
+      if (!allowedExtensions.includes(ext)) {
+        fs.unlinkSync(req.file.path);
+        return res.status(400).send({ 
+          message: `Format file ${ext} tidak didukung untuk test cases. Gunakan TXT.` 
+        });
+      }
+    }
+
     const normalizeCategory = (category) => {
+      if (!category) return 'questions';
+      if (category.startsWith('answers_')) return 'answers';
+      
       const categoryMap = {
         'soal': 'questions',
         'kunci': 'answers', 
@@ -37,22 +85,55 @@ exports.uploadFile = async (req, res) => {
         'answers': 'answers',
         'testCases': 'testCases'
       };
+      
       return categoryMap[category] || category;
     };
 
-    const normalizedCategory = normalizeCategory(req.body.fileCategory || "questions");
+    // ✅ Map language from extension
+    const getLanguageType = (extension) => {
+      const langMap = {
+        '.js': 'JavaScript', '.jsx': 'React',
+        '.ts': 'TypeScript', '.tsx': 'TypeScript React',
+        '.py': 'Python', '.java': 'Java',
+        '.c': 'C', '.cpp': 'C++', '.cc': 'C++', '.cxx': 'C++',
+        '.h': 'C Header', '.hpp': 'C++ Header',
+        '.cs': 'C#', '.php': 'PHP', '.rb': 'Ruby',
+        '.go': 'Go', '.rs': 'Rust', '.kt': 'Kotlin',
+        '.swift': 'Swift', '.dart': 'Dart', '.scala': 'Scala',
+        '.r': 'R', '.m': 'MATLAB', '.sh': 'Shell', '.bash': 'Bash',
+        '.sql': 'SQL', '.html': 'HTML', '.htm': 'HTML',
+        '.css': 'CSS', '.scss': 'SCSS', '.sass': 'SASS',
+        '.json': 'JSON', '.xml': 'XML', '.yaml': 'YAML', '.yml': 'YAML',
+        '.txt': 'Text', '.pdf': 'PDF', '.docx': 'Word', '.doc': 'Word'
+      };
+      return langMap[extension] || null;
+    };
 
-    // Simpan informasi file ke database dengan enhanced tracking
+    const normalizedCategory = normalizeCategory(fileCategory || "questions");
+
+    // ✅ Create file with all metadata
     const file = await File.create({
       originalname: req.file.originalname,
       filename: req.file.filename,
       filepath: req.file.path,
-      filetype: path.extname(req.file.originalname).substring(1).toUpperCase(),
+      filetype: ext.substring(1).toUpperCase(),
       filesize: req.file.size,
       filecategory: normalizedCategory,
       question_set_id: req.body.questionSetId,
       uploadedBy: req.userId,
-      is_deleted: false
+      is_deleted: false,
+      mimeType: req.file.mimetype || null, // ✅ Set mime type
+      languageType: getLanguageType(ext), // ✅ Set language type
+      supportsPreview: ['.pdf', '.txt', '.html', '.htm'].includes(ext) // ✅ Set preview support
+    });
+
+    console.log('File created successfully:', {
+      id: file.id,
+      originalname: file.originalname,
+      filetype: file.filetype,
+      filecategory: file.filecategory,
+      mimeType: file.mimeType,
+      languageType: file.languageType
     });
 
     res.status(201).send({
@@ -61,18 +142,26 @@ exports.uploadFile = async (req, res) => {
         id: file.id,
         originalname: file.originalname,
         filetype: file.filetype,
-        filecategory: file.filecategory
+        filecategory: file.filecategory,
+        languageType: file.languageType
       }
     });
+    
   } catch (error) {
-    // Hapus file jika terjadi error
-    if (req.file) {
-      fs.unlinkSync(req.file.path);
+    console.error('Upload error:', error);
+    if (req.file && req.file.path) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (unlinkError) {
+        console.error('Error deleting file:', unlinkError);
+      }
     }
-    res.status(500).send({ message: error.message });
+    res.status(500).send({ 
+      message: "Terjadi kesalahan saat upload", 
+      error: error.message 
+    });
   }
 };
-
 // Download file
 exports.downloadFile = async (req, res) => {
   try {
